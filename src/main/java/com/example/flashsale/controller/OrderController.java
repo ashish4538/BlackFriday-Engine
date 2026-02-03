@@ -11,24 +11,32 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 @RestController
-@RequiredArgsConstructor
 public class OrderController {
 
     private final InventoryService inventoryService;
     private final Map<String, PaymentStrategy> paymentStrategies;
 
-    @PostMapping("/purchase")
-    public ResponseEntity<String> purchase(@RequestParam String itemId, @RequestParam String paymentType) {
-        boolean purchaseResult = inventoryService.purchase(itemId);
+    public OrderController(InventoryService inventoryService, Map<String, PaymentStrategy> paymentStrategies) {
+        this.inventoryService = inventoryService;
+        this.paymentStrategies = paymentStrategies;
+    }
+
+    @PostMapping({"/purchase", "/api/orders"})
+    public ResponseEntity<String> purchase(
+            @RequestParam String userId,   
+            @RequestParam String itemId, 
+            @RequestParam String paymentType,
+            @RequestParam double price      
+    ) {
+        boolean purchaseResult = inventoryService.purchase(userId, itemId, price);
         
         if (purchaseResult) {
             PaymentStrategy strategy = paymentStrategies.get(paymentType);
             if (strategy == null) {
-                // In a real scenario, we might want to rollback the stock here or handle it better
                 return ResponseEntity.badRequest().body("Invalid payment type");
             }
             
-            boolean paymentSuccess = strategy.pay(100.0); // Dummy amount
+            boolean paymentSuccess = strategy.pay(price);
             if (paymentSuccess) {
                 return ResponseEntity.ok("Purchase successful with " + paymentType);
             } else {
@@ -37,5 +45,10 @@ public class OrderController {
         }
         
         return ResponseEntity.status(409).body("Item out of stock or could not acquire lock");
+    }
+
+    @org.springframework.web.bind.annotation.GetMapping("/api/inventory/stock/{itemId}")
+    public ResponseEntity<Integer> getStock(@org.springframework.web.bind.annotation.PathVariable String itemId) {
+        return ResponseEntity.ok(inventoryService.getStock(itemId));
     }
 }

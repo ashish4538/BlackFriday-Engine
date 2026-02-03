@@ -1,0 +1,18 @@
+replicaCount: 3
+
+image:
+  repository: flash-sale-app
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 8080
+
+env:
+  springKafkaBootstrapServers: "kafka-service:9092"
+  springRedisHost: "redis-service"
+  springRedisPort: "6379"
+  springDatasourceUrl: "jdbc:postgresql://postgres-service:5432/flashsale"
+  springDatasourceUsername: "postgres"
+  springDatasourcePassword: "password"

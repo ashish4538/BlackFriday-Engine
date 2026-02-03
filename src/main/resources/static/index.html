@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flash Sale App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Product Card -->
+        <div class="card product-card">
+            <div class="card-header">
+                <h2>Gaming Laptop X</h2>
+                <div class="stock-meter">
+                    Stock Left: <span id="stock-count">Loading...</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="price">$1999.99</p>
+                <button id="buy-btn" class="btn">Buy Now</button>
+            </div>
+        </div>
+
+        <!-- Revision Card -->
+        <div class="card revision-card">
+            <h3>Async/Await vs .then()</h3>
+            <p><strong>.then()</strong> uses a promise chain. It's often harder to read with complex logic.</p>
+            <pre>
+fetch(url)
+  .then(res => res.json())
+  .then(data => console.log(data))
+  .catch(err => console.error(err));
+            </pre>
+            <p><strong>async/await</strong> looks synchronous and is cleaner for error handling with try/catch.</p>
+            <pre>
+try {
+  const res = await fetch(url);
+  const data = await res.json();
+  console.log(data);
+} catch (err) {
+  console.error(err);
+}
+            </pre>
+        </div>
+    </div>
+
+    <div id="toast-container"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>

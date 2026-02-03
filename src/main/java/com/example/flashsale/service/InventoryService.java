@@ -6,14 +6,21 @@ import org.redisson.api.RAtomicLong;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
+import com.example.flashsale.producer.KafkaOrderProducer;
+import com.example.flashsale.model.OrderEvent;
 
 import java.util.concurrent.TimeUnit;
 
 @Service
-@RequiredArgsConstructor
 public class InventoryService {
 
     private final RedissonClient redissonClient;
+    private final KafkaOrderProducer kafkaOrderProducer;
+
+    public InventoryService(RedissonClient redissonClient, KafkaOrderProducer kafkaOrderProducer) {
+        this.redissonClient = redissonClient;
+        this.kafkaOrderProducer = kafkaOrderProducer;
+    }
 
     @PostConstruct
     public void init() {
@@ -25,14 +32,13 @@ public class InventoryService {
         stock2.set(100);
     }
 
-    public boolean purchase(String itemId) {
+    public boolean purchase(String userId, String itemId, double price) {
         String lockKey = "lock:" + itemId;
         String stockKey = "stock:" + itemId;
         
         RLock lock = redissonClient.getLock(lockKey);
         
         try {
-            // Try to acquire lock for up to 5 seconds, lease time 10 seconds
             boolean isLocked = lock.tryLock(5, 10, TimeUnit.SECONDS);
             if (isLocked) {
                 try {
@@ -41,12 +47,15 @@ public class InventoryService {
                     
                     if (currentStock > 0) {
                         try {
-                            // Simulate processing time
-                            Thread.sleep(10);
+                             Thread.sleep(10); 
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                         }
                         stock.decrementAndGet();
+                        
+                        OrderEvent event = new OrderEvent(userId, itemId, price);
+                        kafkaOrderProducer.sendOrderEvent(event);
+                        
                         return true;
                     }
                     return false;
@@ -54,7 +63,7 @@ public class InventoryService {
                     lock.unlock();
                 }
             } else {
-                return false; // Could not acquire lock
+                return false; 
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

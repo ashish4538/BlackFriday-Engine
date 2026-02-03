@@ -1,0 +1,3 @@
+com/example/flashsale/model/OrderEvent.class
+com/example/flashsale/producer/KafkaOrderProducer.class
+com/example/flashsale/controller/OrderController.class

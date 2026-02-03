@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "flash-sale.fullname" . }}
+  labels:
+    {{- include "flash-sale.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "flash-sale.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "flash-sale.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              value: {{ .Values.env.springKafkaBootstrapServers }}
+            - name: SPRING_REDIS_HOST
+              value: {{ .Values.env.springRedisHost }}
+            - name: SPRING_REDIS_PORT
+              value: {{ .Values.env.springRedisPort | quote }}
+            - name: SPRING_DATASOURCE_URL
+              value: {{ .Values.env.springDatasourceUrl }}
+            - name: SPRING_DATASOURCE_USERNAME
+              value: {{ .Values.env.springDatasourceUsername }}
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: {{ .Values.env.springDatasourcePassword }}
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 5
