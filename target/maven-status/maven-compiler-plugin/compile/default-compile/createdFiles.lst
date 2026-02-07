@@ -1,3 +1,13 @@
+com/example/flashsale/repository/ProductRepository.class
 com/example/flashsale/model/OrderEvent.class
+com/example/flashsale/controller/AuthController.class
+com/example/flashsale/model/User.class
+com/example/flashsale/repository/OrderRepository.class
+com/example/flashsale/repository/UserRepository.class
+com/example/flashsale/model/Product.class
+com/example/flashsale/security/CustomUserDetailsService.class
+com/example/flashsale/config/SecurityConfig.class
+com/example/flashsale/model/Order.class
 com/example/flashsale/producer/KafkaOrderProducer.class
 com/example/flashsale/controller/OrderController.class
+com/example/flashsale/controller/ProductController.class

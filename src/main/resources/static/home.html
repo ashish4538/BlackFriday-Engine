@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flash Sale Pro | Premium Tech</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo">⚡ FlashSale<span class="highlight">Pro</span></div>
+        <div class="nav-links">
+            <a href="home.html" class="active">Home</a>
+            <a href="deals.html">Deals</a>
+            <a href="support.html">Support</a>
+        </div>
+        <div class="nav-links" id="auth-links">
+            <a href="login.html">Login</a>
+            <a href="register.html" class="highlight">Sign Up</a>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-content">
+            <h1>Future Tech. <span class="highlight">Now.</span></h1>
+            <p>Experience the latest in gaming, VR, and productivity gear.</p>
+            <a href="deals.html" class="btn" style="display: inline-block; width: auto; font-size: 1.2rem; margin-top: 1rem;">Shop Deals</a>
+        </div>
+    </header>
+
+    <div class="container" style="text-align: center;">
+        <h2 class="section-title" style="text-align: center; border: none;">Why Shop With Us?</h2>
+        <div style="display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap;">
+            <div class="card" style="padding: 2rem; max-width: 300px;">
+                <i class="fas fa-rocket fa-3x highlight" style="margin-bottom: 1rem;"></i>
+                <h3>Fast Shipping</h3>
+                <p>Get your gear in record time with our optimized logistics.</p>
+            </div>
+            <div class="card" style="padding: 2rem; max-width: 300px;">
+                <i class="fas fa-shield-alt fa-3x highlight" style="margin-bottom: 1rem;"></i>
+                <h3>Secure Payments</h3>
+                <p>We use industry-standard encryption for all transactions.</p>
+            </div>
+            <div class="card" style="padding: 2rem; max-width: 300px;">
+                <i class="fas fa-headset fa-3x highlight" style="margin-bottom: 1rem;"></i>
+                <h3>24/7 Support</h3>
+                <p>Our team is always here to help you with any issues.</p>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2024 FlashSale Pro. Built for High Throughput.</p>
+    </footer>
+
+    <script>
+        // Check Auth Status
+        fetch('/api/auth/me')
+            .then(res => res.json())
+            .then(data => {
+                if (data.authenticated === 'true') {
+                    document.getElementById('auth-links').innerHTML = `
+                        <a href="profile.html"><i class="fas fa-user"></i> ${data.username}</a>
+                        <a href="#" onclick="logout()">Logout</a>
+                    `;
+                }
+            });
+
+        function logout() {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/perform_logout';
+            document.body.appendChild(form);
+            form.submit();
+        }
+    </script>
+</body>
+</html>

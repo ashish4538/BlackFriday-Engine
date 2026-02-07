@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Flash Deals | FlashSale Pro</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo">⚡ FlashSale<span class="highlight">Pro</span></div>
+        <div class="nav-links">
+            <a href="home.html">Home</a>
+            <a href="deals.html" class="active">Deals</a>
+            <a href="support.html">Support</a>
+        </div>
+        <div class="nav-links" id="auth-links">
+            <a href="login.html">Login</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <h2 class="section-title" style="margin-bottom: 0;">Live Flash Deals</h2>
+            <div class="timer">Sale Ends In: <span id="countdown">02:45:12</span></div>
+        </div>
+
+        <div id="product-grid" class="product-grid">
+            <div class="loading-spinner">Loading Deals...</div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+    
+    <script src="js/script.js"></script>
+    <script>
+        // Auth check override for header
+        fetch('/api/auth/me')
+            .then(res => res.json())
+            .then(data => {
+                if (data.authenticated === 'true') {
+                    window.currentUser = data.username; // Set global user
+                    document.getElementById('auth-links').innerHTML = `
+                        <a href="profile.html"><i class="fas fa-user"></i> ${data.username}</a>
+                        <a href="#" onclick="logout()">Logout</a>
+                    `;
+                }
+            });
+            
+        function logout() {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/perform_logout';
+            document.body.appendChild(form);
+            form.submit();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard | FlashSale Pro</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="logo">⚡ FlashSale<span class="highlight">Admin</span></div>
+        <div class="nav-links">
+            <a href="home.html">Store Front</a>
+            <a href="#" onclick="logout()">Logout</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h2 class="section-title">Manage Products</h2>
+
+        <!-- Create Product Form -->
+        <div class="card" style="padding: 2rem; margin-bottom: 2rem; max-width: 600px;">
+            <h3>Add New Product</h3>
+            <form id="createProductForm">
+                <div class="form-group">
+                    <label>ID (Unique)</label>
+                    <input type="text" name="id" required placeholder="e.g. item7">
+                </div>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" name="name" required placeholder="Product Name">
+                </div>
+                <div class="form-group">
+                    <label>Price</label>
+                    <input type="number" step="0.01" name="price" required placeholder="99.99">
+                </div>
+                <div class="form-group">
+                    <label>Image URL</label>
+                    <input type="text" name="imageUrl" required placeholder="https://...">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea name="description" required placeholder="Product details..."></textarea>
+                </div>
+                <button type="submit" class="btn">Create Product</button>
+            </form>
+        </div>
+
+        <!-- Product List -->
+        <div class="card" style="padding: 2rem;">
+            <h3>Product List</h3>
+            <div id="productList" style="margin-top: 1rem;">
+                <!-- Loaded via JS -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Fetch and Render
+        async function loadProducts() {
+            const res = await fetch('/api/products');
+            const products = await res.json();
+            const list = document.getElementById('productList');
+            list.innerHTML = products.map(p => `
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 10px 0;">
+                    <div>
+                        <strong>${p.name}</strong> (${p.id}) - $${p.price}
+                    </div>
+                    <div>
+                        <button onclick="deleteProduct('${p.id}')" style="background: var(--danger-color); color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Create
+        document.getElementById('createProductForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            
+            const res = await fetch('/api/products', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                alert("Product Created!");
+                loadProducts();
+                e.target.reset();
+            } else {
+                alert("Failed to create product");
+            }
+        });
+
+        // Delete
+        async function deleteProduct(id) {
+            if (!confirm("Are you sure?")) return;
+            const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                loadProducts();
+            } else {
+                alert("Failed to delete");
+            }
+        }
+
+        function logout() {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/perform_logout';
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        loadProducts();
+    </script>
+</body>
+</html>

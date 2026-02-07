@@ -46,12 +46,11 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
-  postgres:
-    image: postgres:16-alpine
-    container_name: flash-sale-postgres
+  mysql:
+    image: mysql:8.0
+    container_name: flash-sale-mysql
     environment:
-      POSTGRES_DB: flashsale
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      MYSQL_DATABASE: flashsale
+      MYSQL_ROOT_PASSWORD: password
     ports:
-      - "5432:5432"
+      - "3306:3306"

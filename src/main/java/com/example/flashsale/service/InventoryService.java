@@ -16,20 +16,37 @@ public class InventoryService {
 
     private final RedissonClient redissonClient;
     private final KafkaOrderProducer kafkaOrderProducer;
+    private final com.example.flashsale.repository.OrderRepository orderRepository;
+    private final com.example.flashsale.repository.ProductRepository productRepository;
 
-    public InventoryService(RedissonClient redissonClient, KafkaOrderProducer kafkaOrderProducer) {
+    public InventoryService(RedissonClient redissonClient, KafkaOrderProducer kafkaOrderProducer, 
+                            com.example.flashsale.repository.OrderRepository orderRepository,
+                            com.example.flashsale.repository.ProductRepository productRepository) {
         this.redissonClient = redissonClient;
         this.kafkaOrderProducer = kafkaOrderProducer;
+        this.orderRepository = orderRepository;
+        this.productRepository = productRepository;
     }
 
     @PostConstruct
     public void init() {
-        // Initialize with some dummy stock for testing
-        // In a real app, this would likely be done via an admin API or migration
-        RAtomicLong stock1 = redissonClient.getAtomicLong("stock:item1");
-        stock1.set(1);
-        RAtomicLong stock2 = redissonClient.getAtomicLong("stock:item2");
-        stock2.set(100);
+        // Initialize Default Products in DB if empty
+        if (productRepository.count() == 0) {
+            productRepository.save(new com.example.flashsale.model.Product("item1", "Gaming Laptop X", 1999.99, "https://placehold.co/600x400/2d2d2d/FFF?text=Laptop", "High-performance gaming beast."));
+            productRepository.save(new com.example.flashsale.model.Product("item2", "VR Headset Pro", 499.99, "https://placehold.co/600x400/2d2d2d/FFF?text=VR+Set", "Immersive virtual reality experience."));
+            productRepository.save(new com.example.flashsale.model.Product("item3", "4K Monitor", 349.99, "https://placehold.co/600x400/2d2d2d/FFF?text=Monitor", "Crystal clear display for creatives."));
+            productRepository.save(new com.example.flashsale.model.Product("item4", "Mechanical Keyboard", 129.99, "https://placehold.co/600x400/2d2d2d/FFF?text=Keyboard", "Tactile switches for typing bliss."));
+            productRepository.save(new com.example.flashsale.model.Product("item5", "Wireless Mouse", 79.99, "https://placehold.co/600x400/2d2d2d/FFF?text=Mouse", "Ultra-fast response time."));
+            productRepository.save(new com.example.flashsale.model.Product("item6", "Noise Cancelling Headphones", 299.99, "https://placehold.co/600x400/2d2d2d/FFF?text=Headphones", "Focus on your music, not the noise."));
+        }
+
+        // Initialize Stock in Redis
+        redissonClient.getAtomicLong("stock:item1").compareAndSet(0, 5); // Only set if 0 to avoid overwrite on restart
+        redissonClient.getAtomicLong("stock:item2").compareAndSet(0, 50);
+        redissonClient.getAtomicLong("stock:item3").compareAndSet(0, 20);
+        redissonClient.getAtomicLong("stock:item4").compareAndSet(0, 100);
+        redissonClient.getAtomicLong("stock:item5").compareAndSet(0, 150);
+        redissonClient.getAtomicLong("stock:item6").compareAndSet(0, 30);
     }
 
     public boolean purchase(String userId, String itemId, double price) {
@@ -53,6 +70,11 @@ public class InventoryService {
                         }
                         stock.decrementAndGet();
                         
+
+                        // Persist Order to DB (MySQL)
+                        com.example.flashsale.model.Order order = new com.example.flashsale.model.Order(userId, itemId, price);
+                        orderRepository.save(order);
+
                         OrderEvent event = new OrderEvent(userId, itemId, price);
                         kafkaOrderProducer.sendOrderEvent(event);
                         
