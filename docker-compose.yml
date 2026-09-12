@@ -1,56 +1,97 @@
-version: '3.8'
-
 services:
   app:
     build: .
-    container_name: flash-sale-app
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
-      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-      - SPRING_REDIS_HOST=redis
-      - SPRING_REDIS_PORT=6379
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/flashsale
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=postgres
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/flashsale
+      SPRING_DATASOURCE_USERNAME: flashsale
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      SESSION_COOKIE_SECURE: "false" # Local HTTP only; require secure cookies behind TLS.
     depends_on:
-      - redis
-      - kafka
-      - postgres
+      redis: {condition: service_healthy}
+      kafka: {condition: service_healthy}
+      mysql: {condition: service_healthy}
+    mem_limit: 768m
+    cpus: 2
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health/readiness"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 60s
 
   redis:
-    image: redis:alpine
-    container_name: flash-sale-redis
-    ports:
-      - "6379:6379"
+    image: docker.io/library/redis:7.2-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "always", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
+    ports: ["127.0.0.1:6379:6379"]
+    volumes: ["redis-data:/data"]
+    mem_limit: 256m
+    cpus: 1
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    container_name: flash-sale-zookeeper
+    image: docker.io/confluentinc/cp-zookeeper:7.5.0
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-log:/var/lib/zookeeper/log
+    mem_limit: 256m
+    cpus: 1
 
   kafka:
-    image: confluentinc/cp-kafka:7.5.0
-    container_name: flash-sale-kafka
-    ports:
-      - "9092:9092"
-    depends_on:
-      - zookeeper
+    image: docker.io/confluentinc/cp-kafka:7.5.0
+    ports: ["127.0.0.1:9092:9092"]
+    depends_on: [zookeeper]
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    volumes: ["kafka-data:/var/lib/kafka/data"]
+    mem_limit: 1g
+    cpus: 2
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:29092", "--list"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
 
   mysql:
-    image: mysql:8.0
-    container_name: flash-sale-mysql
+    image: docker.io/library/mysql:8.0
     environment:
       MYSQL_DATABASE: flashsale
-      MYSQL_ROOT_PASSWORD: password
-    ports:
-      - "3306:3306"
+      MYSQL_USER: flashsale
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD}
+    ports: ["127.0.0.1:3306:3306"]
+    volumes: ["mysql-data:/var/lib/mysql"]
+    mem_limit: 768m
+    cpus: 2
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_PASSWORD mysql -h 127.0.0.1 -u flashsale -D flashsale -e 'SELECT 1'"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+volumes:
+  redis-data:
+  mysql-data:
+  kafka-data:
+  zookeeper-data:
+  zookeeper-log:

@@ -1,18 +1,20 @@
-replicaCount: 3
-
+replicaCount: 1 # The default session store is local to one application instance.
 image:
   repository: flash-sale-app
   pullPolicy: IfNotPresent
-  tag: "latest"
-
+  tag: "0.0.1-SNAPSHOT"
 service:
   type: ClusterIP
   port: 8080
-
+# Terminate TLS at a separately managed ingress; preserve Host and strip client
+# forwarded headers. The app ignores forwarded headers and uses secure cookies.
+existingSecret: "" # Required keys: database-password and redis-password.
 env:
   springKafkaBootstrapServers: "kafka-service:9092"
   springRedisHost: "redis-service"
   springRedisPort: "6379"
-  springDatasourceUrl: "jdbc:postgresql://postgres-service:5432/flashsale"
-  springDatasourceUsername: "postgres"
-  springDatasourcePassword: "password"
+  springDatasourceUrl: "jdbc:mysql://mysql-service:3306/flashsale"
+  springDatasourceUsername: "flashsale"
+resources:
+  requests: {cpu: "250m", memory: "512Mi"}
+  limits: {cpu: "2", memory: "1Gi"}

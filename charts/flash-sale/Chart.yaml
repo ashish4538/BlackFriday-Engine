@@ -1,6 +1,6 @@
 apiVersion: v2
 name: flash-sale
-description: A Helm chart for High-Throughput Flash-Sale System
+description: Flash-sale application deployment
 type: application
 version: 0.1.0
-appVersion: "1.0.0"
+appVersion: "0.0.1-SNAPSHOT"

@@ -14,36 +14,57 @@ spec:
       labels:
         {{- include "flash-sale.selectorLabels" . | nindent 8 }}
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: ["ALL"]}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
           ports:
-            - name: http
-              containerPort: 8080
-              protocol: TCP
+            - {name: http, containerPort: 8080}
           env:
             - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
-              value: {{ .Values.env.springKafkaBootstrapServers }}
-            - name: SPRING_REDIS_HOST
-              value: {{ .Values.env.springRedisHost }}
-            - name: SPRING_REDIS_PORT
+              value: {{ .Values.env.springKafkaBootstrapServers | quote }}
+            - name: SPRING_DATA_REDIS_HOST
+              value: {{ .Values.env.springRedisHost | quote }}
+            - name: SPRING_DATA_REDIS_PORT
               value: {{ .Values.env.springRedisPort | quote }}
+            - name: SPRING_DATA_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "existingSecret is required" .Values.existingSecret }}
+                  key: redis-password
             - name: SPRING_DATASOURCE_URL
-              value: {{ .Values.env.springDatasourceUrl }}
+              value: {{ .Values.env.springDatasourceUrl | quote }}
             - name: SPRING_DATASOURCE_USERNAME
-              value: {{ .Values.env.springDatasourceUsername }}
+              value: {{ .Values.env.springDatasourceUsername | quote }}
             - name: SPRING_DATASOURCE_PASSWORD
-              value: {{ .Values.env.springDatasourcePassword }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ required "existingSecret is required" .Values.existingSecret }}
+                  key: database-password
+          startupProbe:
+            httpGet: {path: /actuator/health/liveness, port: http}
+            periodSeconds: 5
+            failureThreshold: 60
           livenessProbe:
-            httpGet:
-              path: /actuator/health/liveness
-              port: http
-            initialDelaySeconds: 30
+            httpGet: {path: /actuator/health/liveness, port: http}
             periodSeconds: 10
           readinessProbe:
-            httpGet:
-              path: /actuator/health/readiness
-              port: http
-            initialDelaySeconds: 15
+            httpGet: {path: /actuator/health/readiness, port: http}
             periodSeconds: 5
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 128Mi}

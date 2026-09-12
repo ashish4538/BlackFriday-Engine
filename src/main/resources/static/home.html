@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="js/security.js"></script>
 </head>
 <body>
 
@@ -41,8 +42,8 @@
             </div>
             <div class="card" style="padding: 2rem; max-width: 300px;">
                 <i class="fas fa-shield-alt fa-3x highlight" style="margin-bottom: 1rem;"></i>
-                <h3>Secure Payments</h3>
-                <p>We use industry-standard encryption for all transactions.</p>
+                <h3>Stock Availability</h3>
+                <p>Check available stock before placing an order.</p>
             </div>
             <div class="card" style="padding: 2rem; max-width: 300px;">
                 <i class="fas fa-headset fa-3x highlight" style="margin-bottom: 1rem;"></i>
@@ -53,7 +54,7 @@
     </div>
 
     <footer>
-        <p>&copy; 2024 FlashSale Pro. Built for High Throughput.</p>
+        <p>&copy; 2024 FlashSale Pro.</p>
     </footer>
 
     <script>
@@ -63,7 +64,7 @@
             .then(data => {
                 if (data.authenticated === 'true') {
                     document.getElementById('auth-links').innerHTML = `
-                        <a href="profile.html"><i class="fas fa-user"></i> ${data.username}</a>
+                        <a href="profile.html"><i class="fas fa-user"></i> ${escapeHtml(data.username)}</a>
                         <a href="#" onclick="logout()">Logout</a>
                     `;
                 }
@@ -74,7 +75,7 @@
             form.method = 'POST';
             form.action = '/perform_logout';
             document.body.appendChild(form);
-            form.submit();
+            submitSecureForm(form).catch(() => alert('Logout unavailable; retry'));
         }
     </script>
 </body>

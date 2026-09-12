@@ -1,0 +1,25 @@
+name: Verify
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DB_PASSWORD: ci-local-app
+      DB_ROOT_PASSWORD: ci-local-root
+      SPRING_DATASOURCE_PASSWORD: ci-local-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - run: docker compose config --quiet
+      - run: docker compose up -d --wait redis mysql kafka
+      - run: mvn -B verify
+      - run: docker build -t flash-sale-app:verify .
+      - if: always()
+        run: docker compose down

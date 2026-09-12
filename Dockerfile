@@ -1,16 +1,16 @@
-# Stage 1: Build
 FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
-RUN mvn clean package -DskipTests
+RUN mvn -B package -DskipTests
 
-# Stage 2: Run
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:17-jre-jammy
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 app && useradd --uid 10001 --gid app --no-create-home app
 WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
-
-# Respect container memory limits
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0"
-
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+COPY --from=build --chown=10001:10001 /app/target/*.jar app.jar
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=70.0"
+USER 10001:10001
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]

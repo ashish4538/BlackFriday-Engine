@@ -5,6 +5,7 @@
     <title>Register | FlashSale Pro</title>
     <link rel="stylesheet" href="css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="js/security.js"></script>
 </head>
 <body class="auth-page">
     <div class="auth-container">
@@ -37,10 +38,9 @@
             e.preventDefault();
             const formData = new FormData(e.target);
             const data = Object.fromEntries(formData.entries());
-            data.role = "USER"; // Default role
 
             try {
-                const res = await fetch('/api/auth/register', {
+                const res = await apiFetch('/api/auth/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)

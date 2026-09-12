@@ -7,6 +7,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/products")
@@ -34,13 +37,16 @@ public class ProductController {
     // Admin CRUD
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public Product createProduct(@RequestBody Product product) {
+    public Product createProduct(@Valid @RequestBody Product product) {
+        if (productRepository.existsById(product.getId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Product already exists");
+        }
         return productRepository.save(product);
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<Product> updateProduct(@PathVariable String id, @RequestBody Product productDetails) {
+    public ResponseEntity<Product> updateProduct(@PathVariable String id, @Valid @RequestBody Product productDetails) {
         return productRepository.findById(id)
                 .map(product -> {
                     product.setName(productDetails.getName());

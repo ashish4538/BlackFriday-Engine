@@ -6,6 +6,7 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="js/security.js"></script>
 </head>
 <body>
 
@@ -60,16 +61,16 @@
     <script>
         // Fetch and Render
         async function loadProducts() {
-            const res = await fetch('/api/products');
+            const res = await apiFetch('/api/products');
             const products = await res.json();
             const list = document.getElementById('productList');
             list.innerHTML = products.map(p => `
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 10px 0;">
                     <div>
-                        <strong>${p.name}</strong> (${p.id}) - $${p.price}
+                        <strong>${escapeHtml(p.name)}</strong> (${escapeHtml(p.id)}) - $${p.price}
                     </div>
                     <div>
-                        <button onclick="deleteProduct('${p.id}')" style="background: var(--danger-color); color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Delete</button>
+                        <button onclick="deleteProduct('${escapeHtml(p.id)}')" style="background: var(--danger-color); color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Delete</button>
                     </div>
                 </div>
             `).join('');
@@ -81,7 +82,7 @@
             const formData = new FormData(e.target);
             const data = Object.fromEntries(formData.entries());
             
-            const res = await fetch('/api/products', {
+            const res = await apiFetch('/api/products', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
@@ -99,7 +100,7 @@
         // Delete
         async function deleteProduct(id) {
             if (!confirm("Are you sure?")) return;
-            const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+            const res = await apiFetch(`/api/products/${id}`, { method: 'DELETE' });
             if (res.ok) {
                 loadProducts();
             } else {
@@ -112,7 +113,7 @@
             form.method = 'POST';
             form.action = '/perform_logout';
             document.body.appendChild(form);
-            form.submit();
+            submitSecureForm(form).catch(() => alert('Logout unavailable; retry'));
         }
 
         loadProducts();

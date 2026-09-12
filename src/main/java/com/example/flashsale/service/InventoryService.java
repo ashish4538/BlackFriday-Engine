@@ -1,100 +1,112 @@
 package com.example.flashsale.service;
 
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
-import org.redisson.api.RAtomicLong;
+import com.example.flashsale.model.Order;
+import com.example.flashsale.repository.OrderRepository;
+import com.example.flashsale.repository.ProductRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import com.example.flashsale.producer.KafkaOrderProducer;
-import com.example.flashsale.model.OrderEvent;
-
+import org.springframework.web.server.ResponseStatusException;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Service
 public class InventoryService {
+    private static final DefaultRedisScript<String> RESERVE = new DefaultRedisScript<>();
+    static {
+        RESERVE.setLocation(new ClassPathResource("redis/reserve.lua"));
+        RESERVE.setResultType(String.class);
+    }
+    private final RedissonClient redisson;
+    private final StringRedisTemplate redis;
+    private final OrderRepository orders;
+    private final ProductRepository products;
+    private final MeterRegistry metrics;
+    private final long lockWaitMs;
 
-    private final RedissonClient redissonClient;
-    private final KafkaOrderProducer kafkaOrderProducer;
-    private final com.example.flashsale.repository.OrderRepository orderRepository;
-    private final com.example.flashsale.repository.ProductRepository productRepository;
-
-    public InventoryService(RedissonClient redissonClient, KafkaOrderProducer kafkaOrderProducer, 
-                            com.example.flashsale.repository.OrderRepository orderRepository,
-                            com.example.flashsale.repository.ProductRepository productRepository) {
-        this.redissonClient = redissonClient;
-        this.kafkaOrderProducer = kafkaOrderProducer;
-        this.orderRepository = orderRepository;
-        this.productRepository = productRepository;
+    public InventoryService(RedissonClient redisson, StringRedisTemplate redis, OrderRepository orders,
+                            ProductRepository products, MeterRegistry metrics,
+                            @Value("${inventory.lock-wait-ms:500}") long lockWaitMs) {
+        this.redisson = redisson;
+        this.redis = redis;
+        this.orders = orders;
+        this.products = products;
+        this.metrics = metrics;
+        this.lockWaitMs = lockWaitMs;
     }
 
-    @PostConstruct
-    public void init() {
-        // Initialize Default Products in DB if empty
-        if (productRepository.count() == 0) {
-            productRepository.save(new com.example.flashsale.model.Product("item1", "Gaming Laptop X", 1999.99, "https://placehold.co/600x400/2d2d2d/FFF?text=Laptop", "High-performance gaming beast."));
-            productRepository.save(new com.example.flashsale.model.Product("item2", "VR Headset Pro", 499.99, "https://placehold.co/600x400/2d2d2d/FFF?text=VR+Set", "Immersive virtual reality experience."));
-            productRepository.save(new com.example.flashsale.model.Product("item3", "4K Monitor", 349.99, "https://placehold.co/600x400/2d2d2d/FFF?text=Monitor", "Crystal clear display for creatives."));
-            productRepository.save(new com.example.flashsale.model.Product("item4", "Mechanical Keyboard", 129.99, "https://placehold.co/600x400/2d2d2d/FFF?text=Keyboard", "Tactile switches for typing bliss."));
-            productRepository.save(new com.example.flashsale.model.Product("item5", "Wireless Mouse", 79.99, "https://placehold.co/600x400/2d2d2d/FFF?text=Mouse", "Ultra-fast response time."));
-            productRepository.save(new com.example.flashsale.model.Product("item6", "Noise Cancelling Headphones", 299.99, "https://placehold.co/600x400/2d2d2d/FFF?text=Headphones", "Focus on your music, not the noise."));
-        }
-
-        // Initialize Stock in Redis
-        redissonClient.getAtomicLong("stock:item1").compareAndSet(0, 5); // Only set if 0 to avoid overwrite on restart
-        redissonClient.getAtomicLong("stock:item2").compareAndSet(0, 50);
-        redissonClient.getAtomicLong("stock:item3").compareAndSet(0, 20);
-        redissonClient.getAtomicLong("stock:item4").compareAndSet(0, 100);
-        redissonClient.getAtomicLong("stock:item5").compareAndSet(0, 150);
-        redissonClient.getAtomicLong("stock:item6").compareAndSet(0, 30);
-    }
-
-    public boolean purchase(String userId, String itemId, double price) {
-        String lockKey = "lock:" + itemId;
-        String stockKey = "stock:" + itemId;
-        
-        RLock lock = redissonClient.getLock(lockKey);
-        
+    // One order per authenticated user/product. Inventory and dedup keys have no TTL.
+    public Order purchase(String userId, String itemId) {
+        validateItemId(itemId);
+        RLock lock = redisson.getLock("purchase-lock:" + itemId + ":" + userId);
+        boolean acquired = false;
         try {
-            boolean isLocked = lock.tryLock(5, 10, TimeUnit.SECONDS);
-            if (isLocked) {
-                try {
-                    RAtomicLong stock = redissonClient.getAtomicLong(stockKey);
-                    long currentStock = stock.get();
-                    
-                    if (currentStock > 0) {
-                        try {
-                             Thread.sleep(10); 
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                        stock.decrementAndGet();
-                        
-
-                        // Persist Order to DB (MySQL)
-                        com.example.flashsale.model.Order order = new com.example.flashsale.model.Order(userId, itemId, price);
-                        orderRepository.save(order);
-
-                        OrderEvent event = new OrderEvent(userId, itemId, price);
-                        kafkaOrderProducer.sendOrderEvent(event);
-                        
-                        return true;
-                    }
-                    return false;
-                } finally {
-                    lock.unlock();
-                }
-            } else {
-                return false; 
+            // Watchdog renews the lease; Lua and SQL uniqueness remain the correctness boundary.
+            acquired = lock.tryLock(lockWaitMs, TimeUnit.MILLISECONDS);
+            if (!acquired) {
+                metrics.counter("purchase.outcomes", "result", "busy").increment();
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Purchase busy; retry");
             }
+            var existing = orders.findByUserIdAndItemId(userId, itemId);
+            if (existing.isPresent()) {
+                metrics.counter("purchase.outcomes", "result", "duplicate").increment();
+                return existing.get();
+            }
+            var product = products.findById(itemId).orElseThrow(
+                    () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found"));
+            String eventId = redis.execute(RESERVE,
+                    List.of("stock:" + itemId, "reservation:" + itemId + ":" + userId),
+                    UUID.randomUUID().toString());
+            if ("SOLD_OUT".equals(eventId)) {
+                metrics.counter("purchase.outcomes", "result", "sold_out").increment();
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Item out of stock");
+            }
+            if (eventId == null || "UNINITIALIZED".equals(eventId)) {
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Inventory unavailable");
+            }
+            // Retain reservation on ambiguous SQL failure: a lost commit response cannot
+            // safely be compensated. A same-user/item retry reuses this stable event ID.
+            Order order = orders.saveAndFlush(new Order(eventId, userId, itemId, product.getPrice()));
+            metrics.counter("purchase.outcomes", "result", "accepted").increment();
+            return order;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return false;
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Purchase interrupted");
+        } finally {
+            if (acquired && lock.isHeldByCurrentThread()) lock.unlock();
         }
     }
 
-    public int getStock(String itemId) {
-        RAtomicLong stock = redissonClient.getAtomicLong("stock:" + itemId);
-        return (int) stock.get();
+    public long getStock(String itemId) {
+        validateItemId(itemId);
+        String value = redis.opsForValue().get("stock:" + itemId);
+        if (value == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Inventory not initialized");
+        return Long.parseLong(value);
+    }
+
+    public boolean initialize(String itemId, long stock) {
+        validateItemId(itemId);
+        if (stock < 0 || stock > 1_000_000_000L) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid stock");
+        }
+        if (!products.existsById(itemId)) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found");
+        // Missing Redis state after sales requires reconciliation, never guessed replenishment.
+        if (orders.existsByItemId(itemId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Existing orders require inventory reconciliation");
+        }
+        return Boolean.TRUE.equals(redis.opsForValue().setIfAbsent("stock:" + itemId, Long.toString(stock)));
+    }
+
+    private static void validateItemId(String itemId) {
+        if (itemId == null || !itemId.matches("[A-Za-z0-9_-]{1,64}")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid product ID");
+        }
     }
 }

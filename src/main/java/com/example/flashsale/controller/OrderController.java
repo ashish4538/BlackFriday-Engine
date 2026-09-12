@@ -1,54 +1,33 @@
 package com.example.flashsale.controller;
 
+import com.example.flashsale.model.Order;
 import com.example.flashsale.service.InventoryService;
-import com.example.flashsale.strategy.PaymentStrategy;
-import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 public class OrderController {
+    private final InventoryService inventory;
 
-    private final InventoryService inventoryService;
-    private final Map<String, PaymentStrategy> paymentStrategies;
-
-    public OrderController(InventoryService inventoryService, Map<String, PaymentStrategy> paymentStrategies) {
-        this.inventoryService = inventoryService;
-        this.paymentStrategies = paymentStrategies;
-    }
+    public OrderController(InventoryService inventory) { this.inventory = inventory; }
 
     @PostMapping({"/purchase", "/api/orders"})
-    public ResponseEntity<String> purchase(
-            @RequestParam String userId,   
-            @RequestParam String itemId, 
-            @RequestParam String paymentType,
-            @RequestParam double price      
-    ) {
-        boolean purchaseResult = inventoryService.purchase(userId, itemId, price);
-        
-        if (purchaseResult) {
-            PaymentStrategy strategy = paymentStrategies.get(paymentType);
-            if (strategy == null) {
-                return ResponseEntity.badRequest().body("Invalid payment type");
-            }
-            
-            boolean paymentSuccess = strategy.pay(price);
-            if (paymentSuccess) {
-                return ResponseEntity.ok("Purchase successful with " + paymentType);
-            } else {
-                return ResponseEntity.status(500).body("Payment failed");
-            }
-        }
-        
-        return ResponseEntity.status(409).body("Item out of stock or could not acquire lock");
+    public ResponseEntity<Order> purchase(@RequestParam String itemId, Authentication auth) {
+        // Order acceptance does not represent a payment or fulfilment confirmation.
+        return ResponseEntity.accepted().body(inventory.purchase(auth.getName(), itemId));
     }
 
-    @org.springframework.web.bind.annotation.GetMapping("/api/inventory/stock/{itemId}")
-    public ResponseEntity<Integer> getStock(@org.springframework.web.bind.annotation.PathVariable String itemId) {
-        return ResponseEntity.ok(inventoryService.getStock(itemId));
+    @GetMapping("/api/inventory/stock/{itemId}")
+    public long stock(@PathVariable String itemId) { return inventory.getStock(itemId); }
+
+    @PostMapping("/api/inventory/{itemId}/initialize")
+    public ResponseEntity<Void> initialize(@PathVariable String itemId, @RequestParam long stock) {
+        if (!inventory.initialize(itemId, stock)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Inventory already initialized");
+        }
+        return ResponseEntity.status(201).build();
     }
 }

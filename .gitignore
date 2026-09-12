@@ -97,3 +97,9 @@ surefire-reports/
 # Crash reports
 hs_err_pid*
 replay_pid*
+
+# Local audit and benchmark evidence
+docs/production-readiness-audit.md
+benchmarks/results/
+benchmarks/*.log
+benchmarks/*.txt

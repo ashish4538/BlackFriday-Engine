@@ -1,66 +1,46 @@
 package com.example.flashsale.config;
 
-import com.example.flashsale.security.CustomUserDetailsService;
+import com.example.flashsale.security.PurchaseRateLimitFilter;
+import com.example.flashsale.service.RateLimiter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.AuthenticationProvider;
-import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 @Configuration
-@EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
-
-    private final CustomUserDetailsService userDetailsService;
-
-    public SecurityConfig(CustomUserDetailsService userDetailsService) {
-        this.userDetailsService = userDetailsService;
-    }
-
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-            .csrf(csrf -> csrf.disable()) // Disable CSRF for simplicity in this demo, enable for prod
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/", "/index.html", "/home.html", "/deals.html", "/support.html", "/login.html", "/register.html").permitAll()
-                .requestMatchers("/api/auth/**", "/api/products", "/api/products/**").permitAll() // Allow viewing products
-                .requestMatchers("/css/**", "/js/**", "/images/**", "/style.css", "/script.js").permitAll()
-                .requestMatchers("/admin", "/admin.html").hasRole("ADMIN")
-                .anyRequest().authenticated()
-            )
-            .formLogin(form -> form
-                .loginPage("/login.html")
-                .loginProcessingUrl("/perform_login")
-                .defaultSuccessUrl("/home.html", true)
-                .failureUrl("/login.html?error=true")
-            )
-            .logout(logout -> logout
-                .logoutUrl("/perform_logout")
-                .logoutSuccessUrl("/home.html")
-            );
-
+    SecurityFilterChain securityFilterChain(HttpSecurity http, RateLimiter limiter, MeterRegistry metrics) throws Exception {
+        http.authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.GET, "/", "/index.html", "/home.html", "/deals.html",
+                        "/support.html", "/login.html", "/register.html", "/css/**", "/js/**",
+                        "/images/**", "/api/auth/me", "/api/auth/csrf", "/api/products/**",
+                        "/api/inventory/stock/**", "/actuator/health/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
+                .requestMatchers("/api/products/**", "/api/inventory/**", "/admin", "/admin.html",
+                        "/actuator/**").hasRole("ADMIN")
+                .anyRequest().authenticated())
+            // Keep session CSRF protection, including login, registration and logout.
+            .formLogin(form -> form.loginPage("/login.html").loginProcessingUrl("/perform_login")
+                    .defaultSuccessUrl("/home.html", true).failureUrl("/login.html?error=true"))
+            .logout(logout -> logout.logoutUrl("/perform_logout").logoutSuccessUrl("/home.html"))
+            .exceptionHandling(errors -> errors.defaultAuthenticationEntryPointFor(
+                    (request, response, error) -> response.sendError(401),
+                    new AntPathRequestMatcher("/api/**")))
+            .addFilterAfter(new PurchaseRateLimitFilter(limiter, metrics), AuthorizationFilter.class);
         return http.build();
     }
 
     @Bean
-    public AuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-        provider.setUserDetailsService(userDetailsService);
-        provider.setPasswordEncoder(passwordEncoder());
-        return provider;
-    }
-
-    @Bean
-    public org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer webSecurityCustomizer() {
-        return (web) -> web.ignoring().requestMatchers("/style.css", "/script.js", "/css/**", "/js/**", "/images/**");
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
+    PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 }

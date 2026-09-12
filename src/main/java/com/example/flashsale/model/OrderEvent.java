@@ -1,22 +1,9 @@
 package com.example.flashsale.model;
 
-public class OrderEvent {
-    private String userId;
-    private String itemId;
-    private double price;
+import java.math.BigDecimal;
 
-    public OrderEvent() {}
-
-    public OrderEvent(String userId, String itemId, double price) {
-        this.userId = userId;
-        this.itemId = itemId;
-        this.price = price;
+public record OrderEvent(String eventId, String userId, String itemId, BigDecimal price) {
+    public static OrderEvent from(Order order) {
+        return new OrderEvent(order.getEventId(), order.getUserId(), order.getItemId(), order.getPrice());
     }
-
-    public String getUserId() { return userId; }
-    public void setUserId(String userId) { this.userId = userId; }
-    public String getItemId() { return itemId; }
-    public void setItemId(String itemId) { this.itemId = itemId; }
-    public double getPrice() { return price; }
-    public void setPrice(double price) { this.price = price; }
 }
